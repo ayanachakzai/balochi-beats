@@ -488,8 +488,8 @@ function BeatsSection({ sectionRef }) {
                     : styles.headWord
                 }
               >
-                {w}{' '}
-              </span>
+                {w}
+              </span>{' '}
             ))}
           </h2>
 

@@ -401,8 +401,8 @@ function FFTSection({ sectionRef }) {
           <p className={styles.body}>
             FFT (Fast Fourier Transform) splits the audio into frequency bands — from
             very low to very high. Instead of "how loud?" we see "which frequencies are
-            active right now?" 128 bars rise from the desert plane in a ring: the first
-            64 are crimson for low frequencies, the last 64 teal-bright for highs.
+            active right now?" 128 bars form a complete ring: the first 64 are crimson
+            for low frequencies, the last 64 orange for highs.
           </p>
           <p className={styles.body}>
             The left side of the ring — low frequencies — is almost always fully lit.
@@ -466,7 +466,7 @@ function BeatsSection({ sectionRef }) {
     return () => ctx.revert()
   }, [])
 
-  const headWords = ['A', 'saffron', 'shockwave', 'on', 'every', 'accent']
+  const headWords = ['A', 'saffron', 'burst', 'on', 'every', 'accent']
 
   return (
     <section ref={secRef} className={styles.section} style={{ background: '#060d0f' }} id="vis-beats">
@@ -483,7 +483,7 @@ function BeatsSection({ sectionRef }) {
                 key={i}
                 ref={el => wordsRef.current[i] = el}
                 className={
-                  w === 'saffron' || w === 'shockwave'
+                  w === 'saffron' || w === 'burst'
                     ? `${styles.headWord} ${styles.saffron}`
                     : styles.headWord
                 }
@@ -501,11 +501,15 @@ function BeatsSection({ sectionRef }) {
               gold circle flashes over the red one for a single frame.
             </p>
             <p className={styles.body}>
-              In the 3D version this becomes a saffron RingGeometry shockwave that
-              expands outward across the desert plane — scale 0 to 10, fading over
-              45 frames. Multiple shockwaves stack. Stars pulse saffron simultaneously.
-              The camera micro-shakes. Those brief gold moments make the rhythm readable
-              at a glance without needing percussion.
+              In the 3D version, every accent triggers a burst of 40 saffron gold
+              particles that explode outward from the centre sphere in all directions,
+              fading over half a second. The dambura has no heavy drum — but the
+              rhythmic accents in the plucking are distinct, and the particle burst
+              makes each one impossible to miss.
+            </p>
+            <p className={styles.body}>
+              Beat timing is derived from the track's natural BPM of 112 — one accent
+              fires every 545ms, synced precisely to the music from the first pluck.
             </p>
           </div>
         </div>

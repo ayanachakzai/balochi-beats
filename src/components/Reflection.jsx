@@ -23,7 +23,7 @@ FFT made that impossible to misread.`,
   {
     label: 'What Beats Taught',
     text: `Beat detection was the most surprising part. I expected the pattern to be
-irregular — folk music, hand-plucked, no metronome. But the saffron shockwaves came
+irregular — folk music, hand-plucked, no metronome. But the saffron particle bursts came
 at recognisable intervals. There is a pulse in there. It is not loud or insistent.
 It is simply present, the way heartbeats are present.`,
   },
@@ -140,7 +140,7 @@ export default function Reflection() {
         </div>
 
         <p className={styles.closing}>
-          Week 5 &nbsp;—&nbsp; Creative Data Methods &nbsp;—&nbsp; UAL Camberwell
+          Week 5 &nbsp;—&nbsp; Creative Data Methods &nbsp;—&nbsp; UAL Creative Computing Institute
         </p>
 
       </div>

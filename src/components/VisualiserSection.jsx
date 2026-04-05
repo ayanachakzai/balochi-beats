@@ -356,8 +356,12 @@ function FFTSection({ sectionRef }) {
         }
       )
 
-      const ideEl = codeRef.current?.firstElementChild || codeRef.current
-      gsap.fromTo(ideEl,
+      // Force .ide visible — CSS opacity:0 is overridden by inline style
+      const ideEl = codeRef.current?.firstElementChild
+      if (ideEl) gsap.set(ideEl, { opacity: 1 })
+
+      // Slide the wrapper in — wrapper opacity controls the block's visibility
+      gsap.fromTo(codeRef.current,
         { x: -50, opacity: 0 },
         {
           x: 0, opacity: 1, duration: 0.9, delay: 0.3,

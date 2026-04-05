@@ -16,18 +16,19 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)
 
     def setup(self):
+        # stream Balochi audio from file
         dot.music.start_file_stream("balochi_audio.wav")
         dot.music.play()
 
     def draw(self):
-        dot.background((40, 0, 60))
+        dot.background((40, 0, 60))  # deep purple
 
         amp = dot.music.amplitude()
-        r = 50 + amp * 900
+        r = 50 + amp * 900  # map to radius
 
-        dot.fill((180, 20, 40))
+        dot.fill((180, 20, 40))  # balochi red
         dot.circle(
-            (dot.width // 2, dot.height // 2),
+            (dot.width//2, dot.height//2),
             r
         )
 
@@ -46,36 +47,32 @@ class MySketch:
         dot.music.play()
 
     def draw(self):
-        dot.background((5, 10, 35))
+        dot.background((5, 10, 35))  # deep navy
 
         amp = dot.music.amplitude()
         size = 80 + amp * 900
         dot.fill((0, 180, 170))
-        dot.circle((dot.width // 2, dot.height // 2), size)
+        dot.circle((dot.width//2, dot.height//2), size)
 
         fft = dot.music.fft()
-        if fft is None:
+        if fft is None:  # guard clause
             return
 
         half = len(fft) // 2
 
+        # Low frequencies — embroidered red
         for i in range(half):
             h = fft[i] * 50
             x = int(i * 3)
             dot.fill((200, 40, 40))
-            dot.rectangle(
-                (x, dot.height),
-                (x + 2, dot.height - h)
-            )
+            dot.rectangle((x, dot.height), (x + 2, dot.height - h))
 
+        # High frequencies — Balochi orange
         for i in range(half, len(fft)):
             h = fft[i] * 200
             x = 450 + int((i - half) * 3)
             dot.fill((255, 160, 40))
-            dot.rectangle(
-                (x, dot.height),
-                (x + 2, dot.height - h)
-            )
+            dot.rectangle((x, dot.height), (x + 2, dot.height - h))
 
 MySketch()`,
 
@@ -257,6 +254,8 @@ function AmplitudeSection({ sectionRef }) {
       )
 
       // code block slides in from right
+      const ampIdeEl = codeRef.current?.firstElementChild
+      if (ampIdeEl) gsap.set(ampIdeEl, { opacity: 1 })
       gsap.fromTo(codeRef.current,
         { x: 50, opacity: 0 },
         {

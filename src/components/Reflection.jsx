@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import styles from './Reflection.module.css'
@@ -94,13 +94,14 @@ export default function Reflection() {
         {/* Lead quote */}
         <blockquote ref={quoteRef} className={styles.leadQuote}>
           {quoteText.map((w, i) => (
-            <span
-              key={i}
-              ref={el => quoteWords.current[i] = el}
-              className={styles.quoteWord}
-            >
-              {w}{' '}
-            </span>
+            <React.Fragment key={i}>
+              <span
+                ref={el => quoteWords.current[i] = el}
+                className={styles.quoteWord}
+              >
+                {w}
+              </span>{' '}
+            </React.Fragment>
           ))}
         </blockquote>
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import styles from './VisualiserSection.module.css'
@@ -479,17 +479,18 @@ function BeatsSection({ sectionRef }) {
 
           <h2 ref={headRef} className={styles.headingCinematic}>
             {headWords.map((w, i) => (
-              <span
-                key={i}
-                ref={el => wordsRef.current[i] = el}
-                className={
-                  w === 'saffron' || w === 'burst'
-                    ? `${styles.headWord} ${styles.saffron}`
-                    : styles.headWord
-                }
-              >
-                {w}
-              </span>{' '}
+              <React.Fragment key={i}>
+                <span
+                  ref={el => wordsRef.current[i] = el}
+                  className={
+                    w === 'saffron' || w === 'burst'
+                      ? `${styles.headWord} ${styles.saffron}`
+                      : styles.headWord
+                  }
+                >
+                  {w}
+                </span>{' '}
+              </React.Fragment>
             ))}
           </h2>
 

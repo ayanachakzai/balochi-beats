@@ -50,16 +50,17 @@
 }
 
 .imgName {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   font-size: clamp(2.8rem, 5vw, 5rem);
-  letter-spacing: 0.08em;
   color: #f5ede0;
   line-height: 1;
   text-shadow: 0 2px 20px rgba(6, 13, 15, 0.8);
 }
 
 .imgSub {
-  font-family: 'EB Garamond', serif;
+  font-family: 'DM Sans', sans-serif;
   font-style: italic;
   font-size: 1rem;
   color: #2a9d8f;
@@ -75,9 +76,10 @@
 }
 
 .pullQuote {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-style: italic;
   font-weight: 300;
+  letter-spacing: 0.02em;
   font-size: clamp(1.6rem, 3vw, 2.8rem);
   color: #f5ede0;
   line-height: 1.4;
@@ -88,10 +90,12 @@
 }
 
 .body {
-  font-family: 'EB Garamond', serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 1.15rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   color: #d4c9b8;
-  line-height: 2;
+  line-height: 1.8;
   margin-bottom: 1.8rem;
   opacity: 0;     /* GSAP sets to 1 */
 }

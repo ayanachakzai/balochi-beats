@@ -17,7 +17,7 @@
 
 /* ── Decorative quote mark ── */
 .decorQuote {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 12rem;
   color: #1a5c5a;
   opacity: 0.2;
@@ -29,9 +29,10 @@
 
 /* ── Lead quote ── */
 .leadQuote {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-style: italic;
   font-weight: 300;
+  letter-spacing: 0.02em;
   font-size: clamp(1.8rem, 3.5vw, 3rem);
   color: #f5ede0;
   line-height: 1.4;
@@ -67,19 +68,22 @@
 }
 
 .blockLabel {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 0.7rem;
-  letter-spacing: 0.3em;
+  font-weight: 600;
+  letter-spacing: 0.15em;
   color: #2a9d8f;
   display: block;
   margin-bottom: 1rem;
 }
 
 .blockText {
-  font-family: 'EB Garamond', serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 1.2rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   color: #d4c9b8;
-  line-height: 2;
+  line-height: 1.8;
   white-space: pre-wrap;
 }
 
@@ -111,16 +115,17 @@
 }
 
 .creditVal {
-  font-family: 'EB Garamond', serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 1rem;
   color: rgba(245, 237, 224, 0.5);
 }
 
 /* ── Closing ── */
 .closing {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 0.75rem;
-  letter-spacing: 0.5em;
+  font-weight: 600;
+  letter-spacing: 0.15em;
   color: #2a9d8f;
   text-align: center;
   margin-top: 80px;

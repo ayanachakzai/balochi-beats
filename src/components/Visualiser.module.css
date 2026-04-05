@@ -31,11 +31,10 @@
 }
 
 .heroTitle {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 300;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
   font-size: clamp(3.5rem, 10vw, 8.5rem);
-  letter-spacing: 0.06em;
+  letter-spacing: -0.02em;
   color: var(--ivory);
   text-align: center;
   line-height: 1;
@@ -43,9 +42,10 @@
 }
 
 .heroSubtitle {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
   font-size: clamp(0.8rem, 1.5vw, 1rem);
-  letter-spacing: 0.35em;
+  letter-spacing: 0.15em;
   color: var(--teal-bright);
   margin-top: 1.2rem;
   text-align: center;
@@ -71,9 +71,10 @@
 }
 
 .playLabel {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
   font-size: 0.9rem;
-  letter-spacing: 0.4em;
+  letter-spacing: 0.15em;
   color: var(--ivory-dim);
 }
 
@@ -100,9 +101,10 @@
 }
 
 .modeBtn {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
   font-size: 0.9rem;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.15em;
   padding: 0.55rem 1.4rem;
   background:   rgba(26, 92, 90, 0.15);
   border:       1px solid rgba(42, 157, 143, 0.3);
@@ -185,9 +187,10 @@
 }
 
 .legendLabel {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
   font-size: 0.65rem;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.15em;
   color: #d4c9b8;
 }
 
@@ -206,9 +209,10 @@
 }
 
 .scrollText {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
   font-size: 0.7rem;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.15em;
   color: var(--ivory-dim);
 }
 

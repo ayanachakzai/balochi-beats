@@ -1,0 +1,24 @@
+.dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background: var(--ivory);
+  border-radius: 50%;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--teal-bright);
+  border-radius: 50%;
+  will-change: transform, opacity;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}

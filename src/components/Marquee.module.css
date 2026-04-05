@@ -1,0 +1,39 @@
+.root {
+  width: 100%;
+  overflow: hidden;
+  background: #060d0f;
+  border-top:    1px solid rgba(42, 157, 143, 0.3);
+  border-bottom: 1px solid rgba(42, 157, 143, 0.3);
+  padding: 18px 0;
+  position: relative;
+  z-index: 2;
+}
+
+.inner {
+  display: flex;
+  width: max-content;
+  animation: marquee 25s linear infinite;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  padding-right: 0;
+}
+
+.word {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: 0.3em;
+  display: inline-block;
+}
+
+.teal    { color: #2a9d8f; }
+.saffron { color: #e8a020; }
+.dim     { color: rgba(245, 237, 224, 0.25); }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}

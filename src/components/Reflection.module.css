@@ -1,0 +1,134 @@
+.section {
+  position: relative;
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    #0d2422 0%,
+    #060d0f 60%
+  );
+  padding: 120px 0 80px;
+  overflow: hidden;
+}
+
+.inner {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 3rem;
+}
+
+/* ── Decorative quote mark ── */
+.decorQuote {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 12rem;
+  color: #1a5c5a;
+  opacity: 0.2;
+  line-height: 0;
+  margin-bottom: -40px;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ── Lead quote ── */
+.leadQuote {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(1.8rem, 3.5vw, 3rem);
+  color: #f5ede0;
+  line-height: 1.4;
+  border: none;
+  padding: 0;
+  margin: 0 0 3rem;
+}
+
+.quoteWord {
+  display: inline-block;
+  opacity: 0; /* GSAP controls */
+}
+
+/* ── Saffron line ── */
+.saffronLine {
+  width: 60px;
+  height: 2px;
+  background: #e8a020;
+  margin: 0 auto 4rem;
+  opacity: 0; /* GSAP controls */
+}
+
+/* ── Reflection blocks ── */
+.block {
+  padding-bottom: 48px;
+  margin-bottom: 48px;
+  border-bottom: 1px solid rgba(42, 157, 143, 0.15);
+  opacity: 0; /* GSAP controls */
+
+  &:last-of-type {
+    border-bottom: none;
+  }
+}
+
+.blockLabel {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  color: #2a9d8f;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.blockText {
+  font-family: 'EB Garamond', serif;
+  font-size: 1.2rem;
+  color: #d4c9b8;
+  line-height: 2;
+  white-space: pre-wrap;
+}
+
+/* ── Credits ── */
+.credits {
+  margin-top: 5rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid rgba(245, 237, 224, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 4rem;
+}
+
+.creditRow {
+  display: flex;
+  gap: 2rem;
+  align-items: baseline;
+}
+
+.creditKey {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #e8a020;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.creditVal {
+  font-family: 'EB Garamond', serif;
+  font-size: 1rem;
+  color: rgba(245, 237, 224, 0.5);
+}
+
+/* ── Closing ── */
+.closing {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.5em;
+  color: #2a9d8f;
+  text-align: center;
+  margin-top: 80px;
+  padding-bottom: 40px;
+}
+
+@media (max-width: 700px) {
+  .inner       { padding: 0 1.5rem; }
+  .decorQuote  { font-size: 7rem; }
+  .creditRow   { flex-direction: column; gap: 0.2rem; }
+}

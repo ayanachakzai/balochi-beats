@@ -1,0 +1,244 @@
+/* ── Base section ── */
+.section {
+  position: relative;
+  padding: 120px 0 140px;
+  overflow: hidden;
+}
+
+/* ── Ghost number ── */
+.ghost {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 28vw;
+  color: #1a5c5a;
+  opacity: 0.12;
+  position: absolute;
+  top: 3rem;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+  will-change: transform;
+  z-index: 0;
+}
+
+.ghostLeft   { left: -2vw; }
+.ghostRight  { right: -2vw; }
+.ghostCentre { left: 50%; transform: translateX(-50%); }
+
+/* ── Split layout (amplitude/FFT) ── */
+.splitGrid {
+  position: relative;
+  z-index: 1;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 5rem;
+  display: grid;
+  grid-template-columns: 55fr 45fr;
+  gap: 6rem;
+  align-items: start;
+}
+
+.splitGridFlip {
+  grid-template-columns: 45fr 55fr;
+}
+
+.textCol {
+  position: sticky;
+  top: 12vh;
+}
+
+.codeCol {
+  /* scrolls while text sticks */
+}
+
+/* ── Typography ── */
+.eyebrow {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.4em;
+  color: #2a9d8f;
+  display: block;
+  margin-bottom: 1.4rem;
+}
+
+.heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(2.2rem, 4vw, 4.5rem);
+  color: #f5ede0;
+  line-height: 1.05;
+  margin-bottom: 2.4rem;
+  opacity: 0; /* GSAP controls */
+}
+
+.body {
+  font-family: 'EB Garamond', serif;
+  font-size: 1.15rem;
+  color: #d4c9b8;
+  line-height: 2;
+  margin-bottom: 1.5rem;
+}
+
+.inlineCode {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.88em;
+  color: #2a9d8f;
+  background: rgba(42, 157, 143, 0.1);
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+
+.saffron     { color: #e8a020; }
+.tealBright  { color: #2a9d8f; }
+
+/* ── Callout ── */
+.callout {
+  border-left: 3px solid #2a9d8f;
+  background:  rgba(26, 92, 90, 0.12);
+  padding:     20px 24px;
+  margin-top:  2.5rem;
+  opacity: 0; /* GSAP controls */
+}
+
+.calloutLabel {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.35em;
+  color: #2a9d8f;
+  display: block;
+  margin-bottom: 0.6rem;
+}
+
+.calloutText {
+  font-family: 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 1rem;
+  color: #d4c9b8;
+  line-height: 1.75;
+}
+
+/* ── IDE window ── */
+.ide {
+  background: #020608;
+  border: 1px solid rgba(42, 157, 143, 0.25);
+  border-radius: 8px 8px 6px 6px;
+  overflow: hidden;
+  box-shadow:
+    0 0 60px rgba(42, 157, 143, 0.08),
+    0 0 120px rgba(232, 160, 32, 0.04),
+    0 40px 80px rgba(2, 6, 8, 0.9);
+  position: relative;
+  opacity: 0; /* GSAP controls */
+}
+
+.ideChrome {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 18px;
+  background: rgba(42, 157, 143, 0.08);
+  border-bottom: 1px solid rgba(42, 157, 143, 0.15);
+  backdrop-filter: blur(12px) saturate(1.4);
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  opacity: 0.9;
+}
+
+.ideFile {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #2a9d8f;
+  margin-left: 10px;
+  letter-spacing: 0.04em;
+}
+
+.ideCode {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  line-height: 1.9;
+  color: #c8c0b8;
+  padding: 1.8rem 2rem;
+  white-space: pre;
+  overflow-x: auto;
+  min-height: 18rem;
+  background: transparent;
+}
+
+/* syntax colours — injected as global spans */
+.ideCode :global(.kw)  { color: #2a9d8f; }   /* keywords  — teal-bright */
+.ideCode :global(.str) { color: #e8a020; }   /* strings   — saffron */
+.ideCode :global(.num) { color: #ff8080; }   /* numbers   — light red */
+.ideCode :global(.c)   { color: #5a8a88; }   /* comments  — muted teal */
+.ideCode :global(.fn)  { color: #f5ede0; }   /* functions — ivory */
+
+.ideCursor {
+  position: absolute;
+  bottom: 1.8rem;
+  right: 2rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: #2a9d8f;
+  font-size: 0.9rem;
+  animation: blink 1.1s step-end infinite;
+}
+
+@keyframes blink {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0; }
+}
+
+/* ── Cinematic layout (Beats) ── */
+.cinematicWrap {
+  position: relative;
+  z-index: 1;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 5rem;
+}
+
+.cinematicText {
+  text-align: center;
+  margin-bottom: 5rem;
+}
+
+.headingCinematic {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(3rem, 6vw, 6rem);
+  color: #f5ede0;
+  line-height: 1.05;
+  margin: 1.5rem 0 2.5rem;
+}
+
+.headWord {
+  display: inline-block;
+  opacity: 0; /* GSAP controls */
+}
+
+.cinematicBody {
+  max-width: 680px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.cinematicCode .ide {
+  opacity: 1; /* already visible, typewriter handles reveal */
+}
+
+@media (max-width: 1100px) {
+  .splitGrid, .splitGridFlip {
+    grid-template-columns: 1fr;
+    padding: 0 2.5rem;
+    gap: 4rem;
+  }
+  .textCol { position: static; }
+  .ghost   { font-size: 40vw; }
+  .cinematicWrap { padding: 0 2rem; }
+}

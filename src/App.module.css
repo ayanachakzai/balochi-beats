@@ -1,17 +1,21 @@
 .main {
-  position: relative;
-  z-index: 1;
-  background: var(--night);
+  min-height: 100vh;
+  padding: 22px;
+  background:
+    linear-gradient(180deg, #dae7f7 0%, #a8bfd7 48%, #7f98b5 100%);
+  color: #101a26;
 }
 
-/* ── Fixed grain overlay ── */
-.grain {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 998;
-  mix-blend-mode: overlay;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 256px 256px;
+.manualGrid {
+  width: min(1160px, 100%);
+  margin: 18px auto 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (max-width: 640px) {
+  .main {
+    padding: 10px;
+  }
 }

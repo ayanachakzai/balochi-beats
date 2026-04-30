@@ -23,7 +23,7 @@
 }
 
 .word {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.1rem;
   letter-spacing: 0.2em;

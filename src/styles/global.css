@@ -1,113 +1,91 @@
-/* ═══════════════════════════════════════
-   RESET
-═══════════════════════════════════════ */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-/* ═══════════════════════════════════════
-   TOKENS
-═══════════════════════════════════════ */
 :root {
-  --night:         #060d0f;
-  --deep-teal:     #0a2a2e;
-  --teal:          #1a5c5a;
-  --teal-bright:   #2a9d8f;
-  --saffron:       #e8a020;
-  --saffron-deep:  #c47c10;
-  --crimson:       #8b1a1a;
-  --ivory:         #f5ede0;
-  --ivory-dim:     rgba(245, 237, 224, 0.5);
-  --dust:          #b8a898;
+  --font-display: Tahoma, "MS Sans Serif", "Microsoft Sans Serif", Arial, sans-serif;
+  --font-body: Tahoma, "MS Sans Serif", "Microsoft Sans Serif", Arial, sans-serif;
+  --font-mono: "Lucida Console", "Courier New", monospace;
+  --xp-blue-900: #0c347c;
+  --xp-blue-700: #1f62c7;
+  --xp-blue-500: #4b8ee8;
+  --xp-silver-100: #f5f8fb;
+  --xp-silver-200: #dfe7ef;
+  --xp-silver-300: #c7d2df;
+  --xp-silver-500: #8494a8;
+  --xp-black: #05070a;
+  --xp-screen: #020406;
+  --xp-text: #122033;
+  --xp-muted: #53667d;
+  --xp-cyan: #46d5d0;
+  --xp-green: #7ad957;
+  --xp-orange: #d97919;
+  --xp-red: #9e2834;
 }
 
-/* ═══════════════════════════════════════
-   BASE
-═══════════════════════════════════════ */
-html {
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
   overflow-x: hidden;
 }
 
 body {
-  background: var(--night);
-  color: var(--ivory);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 18px;
-  line-height: 1.8;
-  cursor: none;
-  overflow-x: hidden;
+  background: #95adc9;
+  color: var(--xp-text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
-/* ═══════════════════════════════════════
-   SCROLLBAR
-═══════════════════════════════════════ */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: var(--night);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--teal-bright);
-  border-radius: 2px;
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
-/* ═══════════════════════════════════════
-   SELECTION
-═══════════════════════════════════════ */
+button {
+  color: inherit;
+  cursor: pointer;
+}
+
+img {
+  max-width: 100%;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
 ::selection {
-  background: var(--saffron);
-  color: var(--night);
+  background: #1f62c7;
+  color: #fff;
 }
 
-/* ═══════════════════════════════════════
-   TYPOGRAPHY
-═══════════════════════════════════════ */
-h1, h2, h3, h4 {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+::-webkit-scrollbar {
+  width: 12px;
 }
 
-code, pre, .mono {
-  font-family: 'JetBrains Mono', monospace;
+::-webkit-scrollbar-track {
+  background: #c7d2df;
 }
 
-.bebas {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-/* Grain is handled as a fixed overlay in App.module.css */
-
-/* ═══════════════════════════════════════
-   SECTION DIVIDER
-═══════════════════════════════════════ */
-.divider {
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(
-    to right,
-    transparent,
-    var(--teal-bright),
-    transparent
-  );
-  opacity: 0.35;
-}
-
-/* ═══════════════════════════════════════
-   CURSOR BASE (Cursor.jsx adds the element)
-═══════════════════════════════════════ */
-#custom-cursor {
-  position: fixed;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  z-index: 9999;
-  mix-blend-mode: difference;
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #f6fbff, #8197b0);
+  border: 1px solid #50647c;
 }

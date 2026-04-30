@@ -3,388 +3,659 @@ import {
 } from 'react'
 import * as THREE from 'three'
 import { gsap } from 'gsap'
+import { createNoise3D } from 'simplex-noise'
+import beatData from '../data/beatTimes.json'
 import styles from './Visualiser.module.css'
 
-// ── GLSL ────────────────────────────────────────────────────────────────────
+const SHOCKWAVE_COUNT = 4
+const BEAT_PARTICLE_POOL_SIZE = 36
+const BEAT_PARTICLES_PER_PULSE = 8
+const BEAT_VISUAL_OFFSET = -0.18
+const LOW_BIN_RANGE = [1, 24]
+const MID_BIN_RANGE = [25, 79]
+const HIGH_BIN_RANGE = [80, 180]
 
-const PLANE_VERT = /* glsl */`
-  uniform float uTime;
-  uniform float uAmplitude;
-  uniform float uFlat;
-  varying float vElev;
-  varying vec2  vUv;
+const FFT_BANDS = [
+  {
+    id: 'low',
+    range: LOW_BIN_RANGE,
+    count: 9,
+    radius: 3.45,
+    startAngle: 122,
+    endAngle: 172,
+    faceAngle: -12,
+    width: 0.16,
+    depth: 0.22,
+    maxHeight: 2.5,
+    response: 1.15,
+    color: 0x22d8ff,
+    emissive: 0x0b6b85,
+  },
+  {
+    id: 'mid',
+    range: MID_BIN_RANGE,
+    count: 14,
+    radius: 2.74,
+    startAngle: 188,
+    endAngle: 262,
+    faceAngle: 0,
+    width: 0.13,
+    depth: 0.2,
+    maxHeight: 1.86,
+    response: 1,
+    color: 0x2dffb0,
+    emissive: 0x0a8058,
+  },
+  {
+    id: 'high',
+    range: HIGH_BIN_RANGE,
+    count: 18,
+    radius: 3.12,
+    startAngle: 286,
+    endAngle: 344,
+    faceAngle: 16,
+    width: 0.075,
+    depth: 0.13,
+    maxHeight: 1.32,
+    response: 0.9,
+    color: 0xc9d4ff,
+    emissive: 0x5e6a99,
+  },
+]
 
-  void main() {
-    vUv = uv;
-    vec3 pos = position;
+const MANUAL_BEAT_TIMES = Array.isArray(beatData.beats) ? beatData.beats : []
 
-    float waves =
-      sin(pos.x * 0.28 + uTime * 0.55) * cos(pos.z * 0.28 + uTime * 0.42) * 1.6
-    + sin(pos.x * 0.65 + uTime * 0.90) * cos(pos.z * 0.50 + uTime * 0.35) * 0.7;
+const COLORS = {
+  background: new THREE.Color(0x010711),
+  glass: new THREE.Color(0x9fdfff),
+  core: new THREE.Color(0x1b3148),
+  coreBright: new THREE.Color(0xc4f6ff),
+  ringLow: new THREE.Color(0x6fd6e7),
+  ringMid: new THREE.Color(0x7ed8d2),
+  ringHigh: new THREE.Color(0xc5d8e8),
+  cyanLight: new THREE.Color(0x65d8ff),
+  amber: new THREE.Color(0xf2b84a),
+}
 
-    float elev = waves * (uAmplitude * 2.8 + 0.4) * (1.0 - uFlat);
-    pos.y += elev;
-    vElev = elev;
+const MODES = [
+  { id: 'amplitude', tab: 'Amplitude', readout: 'Mode: Amplitude' },
+  { id: 'fft', tab: 'Frequency', readout: 'Mode: Frequency' },
+  { id: 'beats', tab: 'Beat Response', readout: 'Mode: Beat Response' },
+]
 
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-  }
-`
+function formatTime(value) {
+  if (!Number.isFinite(value)) return '0:00'
+  const minutes = Math.floor(value / 60)
+  const seconds = Math.floor(value % 60).toString().padStart(2, '0')
+  return `${minutes}:${seconds}`
+}
 
-const PLANE_FRAG = /* glsl */`
-  uniform vec3  uColor;
-  uniform float uAmplitude;
-  varying float vElev;
+function averageBins(freqData, [start, end]) {
+  if (!freqData?.length) return 0
+  const safeStart = Math.max(0, Math.min(freqData.length - 1, start))
+  const safeEnd = Math.max(safeStart + 1, Math.min(freqData.length, end))
+  let sum = 0
+  for (let i = safeStart; i < safeEnd; i += 1) sum += freqData[i]
+  return sum / Math.max(1, safeEnd - safeStart) / 255
+}
 
-  void main() {
-    float t = clamp(vElev * 0.18 + 0.5, 0.0, 1.0);
-    vec3 low  = vec3(0.040, 0.165, 0.160); /* --teal */
-    vec3 high = vec3(0.165, 0.615, 0.565); /* --teal-bright */
-    vec3 col  = mix(low, high, t) + uAmplitude * 0.15;
-    gl_FragColor = vec4(col, 0.75);
-  }
-`
+function sampleBand(freqData, [start, end], index, count) {
+  if (!freqData?.length) return 0
+  const safeStart = Math.max(0, Math.min(freqData.length - 1, start))
+  const safeEnd = Math.max(safeStart + 1, Math.min(freqData.length, end))
+  const progress = count <= 1 ? 0 : index / (count - 1)
+  const bin = safeStart + Math.floor(progress * (safeEnd - safeStart - 1))
+  return freqData[Math.min(freqData.length - 1, bin)] / 255
+}
 
-// ── Constants ────────────────────────────────────────────────────────────────
-const BAR_COUNT   = 128
-const BAR_RADIUS  = 10
-const STAR_COUNT  = 3000
-
-// ── Component ────────────────────────────────────────────────────────────────
 const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
-  // React state (UI only)
-  const [started,    setStarted]    = useState(false)
-  const [playing,    setPlaying]    = useState(false)
+  const [started, setStarted] = useState(false)
+  const [playing, setPlaying] = useState(false)
   const [activeMode, setActiveMode] = useState('amplitude')
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
 
-  // DOM
-  const canvasRef    = useRef(null)
-  const audioRef     = useRef(null)
-  const titleRef     = useRef(null)
-  const subtitleRef  = useRef(null)
-  const playBtnRef   = useRef(null)
-  const overlayRef   = useRef(null)
-  const modeBarRef   = useRef(null)
+  const canvasRef = useRef(null)
+  const audioRef = useRef(null)
+  const rendererRef = useRef(null)
+  const sceneRef = useRef(null)
+  const cameraRef = useRef(null)
+  const clockRef = useRef(new THREE.Clock())
+  const rafRef = useRef(null)
+  const sculptureRef = useRef(null)
+  const shellRef = useRef(null)
+  const coreRef = useRef(null)
+  const coreGeoRef = useRef(null)
+  const coreOriginalRef = useRef(null)
+  const fftColumnsRef = useRef([])
+  const shockwavesRef = useRef([])
+  const particlesRef = useRef([])
+  const keyLightRef = useRef(null)
+  const rimLightRef = useRef(null)
+  const beatLightRef = useRef(null)
+  const beatGlowRef = useRef(0)
+  const amplitudeLevelRef = useRef(0.08)
+  const noiseRef = useRef(createNoise3D())
+  const audioCtxRef = useRef(null)
+  const analyserRef = useRef(null)
+  const dataArrayRef = useRef(null)
+  const timeDataArrayRef = useRef(null)
+  const rollingBassRef = useRef(0.05)
+  const beatCooldownRef = useRef(0)
+  const lastBeatEnergyRef = useRef(0)
+  const manualBeatIndexRef = useRef(0)
+  const lastAudioTimeRef = useRef(0)
 
-  // Three.js
-  const rendererRef  = useRef(null)
-  const sceneRef     = useRef(null)
-  const cameraRef    = useRef(null)
-  const clockRef     = useRef(new THREE.Clock())
-  const rafRef       = useRef(null)
-
-  // Meshes
-  const sphereRef     = useRef(null)
-  const sphereGeoRef  = useRef(null)
-  const origPosRef    = useRef(null)
-  const planeMtlRef   = useRef(null)
-  const barsRef       = useRef([])
-  const barGroupRef   = useRef(null)
-  const starsRef      = useRef(null)
-  const starsMtlRef   = useRef(null)
-  const pointLightRef = useRef(null)
-  const particlesRef  = useRef([])
-
-  // Audio
-  const audioCtxRef    = useRef(null)
-  const analyserRef    = useRef(null)
-  const dataArrayRef   = useRef(null)
-  const beatActiveRef   = useRef(false)
-  const beatIntervalRef = useRef(null)
-  const beatTimeoutRef  = useRef(null)
-
-  // Mode & interpolation state (mutated by GSAP, read in animate)
-  const modeRef  = useRef('amplitude')
+  const modeRef = useRef('amplitude')
   const interpRef = useRef({
-    sphereScale: 1.0,
-    barOpacity:  0.0,
-    planeFlat:   0.0,
-    camZ:       14.0,
-    camY:        4.5,
+    amplitudeBlend: 1,
+    frequencyBlend: 0,
+    beatBlend: 0,
+    shellScale: 1,
+    coreScale: 1.04,
+    ringOpacity: 0.08,
+    ringScale: 0.88,
+    deformation: 0.035,
+    camX: 0,
+    camZ: 7.5,
+    camY: 0.3,
   })
 
-  // ── Expose setMode to App.jsx (ScrollTrigger) ──────────────────────────
   useImperativeHandle(ref, () => ({
-    setMode(m) { doModeTransition(m) },
+    setMode(mode) {
+      doModeTransition(mode)
+    },
   }))
 
   function doModeTransition(newMode) {
     if (modeRef.current === newMode) return
     modeRef.current = newMode
     setActiveMode(newMode)
-    if (onModeChange) onModeChange(newMode)
+    onModeChange?.(newMode)
 
     const p = interpRef.current
-    const sph = sphereRef.current
     if (newMode === 'amplitude') {
-      gsap.to(p, { sphereScale: 1.0, barOpacity: 0.0, planeFlat: 0.0, camZ: 14, camY: 4.5, duration: 1.2, ease: 'power2.inOut' })
-      if (sph) { sph.material.color.set(0xb41428); sph.material.emissive.set(0xb41428) }
+      gsap.to(p, {
+        amplitudeBlend: 1,
+        frequencyBlend: 0,
+        beatBlend: 0,
+        shellScale: 1,
+        coreScale: 1.04,
+        ringOpacity: 0.08,
+        ringScale: 0.86,
+        deformation: 0.035,
+        camX: 0,
+        camZ: 7.5,
+        camY: 0.3,
+        duration: 0.9,
+        ease: 'power2.inOut',
+      })
     } else if (newMode === 'fft') {
-      gsap.to(p, { sphereScale: 0.25, barOpacity: 1.0, planeFlat: 1.0, camZ: 18, camY: 5.5, duration: 1.2, ease: 'power2.inOut' })
-      if (sph) { sph.material.color.set(0x2a9d8f); sph.material.emissive.set(0x0d4d47) }
+      gsap.to(p, {
+        amplitudeBlend: 0.22,
+        frequencyBlend: 1,
+        beatBlend: 0,
+        shellScale: 0.94,
+        coreScale: 0.92,
+        ringOpacity: 0.92,
+        ringScale: 1.08,
+        deformation: 0.14,
+        camX: -0.85,
+        camZ: 8.85,
+        camY: 1.72,
+        duration: 0.9,
+        ease: 'power2.inOut',
+      })
     } else {
-      gsap.to(p, { sphereScale: 0.7, barOpacity: 1.0, planeFlat: 1.0, camZ: 16, camY: 5.0, duration: 1.2, ease: 'power2.inOut' })
-      if (sph) { sph.material.color.set(0xe8a020); sph.material.emissive.set(0xe8a020) }
+      gsap.to(p, {
+        amplitudeBlend: 0.35,
+        frequencyBlend: 0.22,
+        beatBlend: 1,
+        shellScale: 0.98,
+        coreScale: 1.02,
+        ringOpacity: 0.42,
+        ringScale: 1,
+        deformation: 0.2,
+        camX: 0.35,
+        camZ: 8.1,
+        camY: 0.42,
+        duration: 0.9,
+        ease: 'power2.inOut',
+      })
     }
   }
 
-  // ── Three.js setup ────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
-    const W = canvas.clientWidth
-    const H = canvas.clientHeight
-
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false })
-    renderer.setSize(W, H, false)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    const isMobile = window.matchMedia('(max-width: 720px), (pointer: coarse)').matches
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: !isMobile,
+      alpha: false,
+      powerPreference: 'high-performance',
+    })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.35 : 1.75))
     renderer.shadowMap.enabled = false
+    renderer.outputColorSpace = THREE.SRGBColorSpace
     rendererRef.current = renderer
 
-    // Scene
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x060d0f)
-    scene.fog = new THREE.FogExp2(0x060d0f, 0.018)
+    scene.background = COLORS.background
+    scene.fog = new THREE.FogExp2(0x010711, 0.035)
     sceneRef.current = scene
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 300)
-    camera.position.set(0, 4.5, 14)
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 80)
+    camera.position.set(0, 0.3, 7.5)
     camera.lookAt(0, 0, 0)
     cameraRef.current = camera
 
-    // ── Lights ──
-    const ambient = new THREE.AmbientLight(0xf5ede0, 0.25)
+    const sculpture = new THREE.Group()
+    scene.add(sculpture)
+    sculptureRef.current = sculpture
+
+    const ambient = new THREE.AmbientLight(0x9fcfff, 0.38)
     scene.add(ambient)
 
-    const pointLight = new THREE.PointLight(0xe8a020, 2.5, 35)
-    pointLight.position.set(0, 6, 0)
-    scene.add(pointLight)
-    pointLightRef.current = pointLight
+    const keyLight = new THREE.PointLight(0x65d8ff, 4.2, 18)
+    keyLight.position.set(-3.6, 4.2, 4.8)
+    scene.add(keyLight)
+    keyLightRef.current = keyLight
 
-    // ── Desert Plane ──
-    const planeGeo = new THREE.PlaneGeometry(200, 200, 120, 120)
-    planeGeo.rotateX(-Math.PI / 2)
-    const planeMtl = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime:      { value: 0 },
-        uAmplitude: { value: 0 },
-        uFlat:      { value: 0 },
-        uColor:     { value: new THREE.Color(0x1a5c5a) },
-      },
-      vertexShader:   PLANE_VERT,
-      fragmentShader: PLANE_FRAG,
-      wireframe:      true,
-      transparent:    true,
-    })
-    const plane = new THREE.Mesh(planeGeo, planeMtl)
-    plane.position.y = -1.5
-    scene.add(plane)
-    planeMtlRef.current = planeMtl
+    const rimLight = new THREE.PointLight(0x345dff, 2.4, 22)
+    rimLight.position.set(4.2, -1.8, -4.6)
+    scene.add(rimLight)
+    rimLightRef.current = rimLight
 
-    // ── Stars ──
-    const starGeo = new THREE.BufferGeometry()
-    const starPos = new Float32Array(STAR_COUNT * 3)
-    for (let i = 0; i < STAR_COUNT; i++) {
-      const theta = Math.random() * Math.PI * 2
-      const phi   = Math.random() * Math.PI * 0.48  // upper hemisphere only
-      const r     = 80 + Math.random() * 60
-      starPos[i*3]   = r * Math.sin(phi) * Math.cos(theta)
-      starPos[i*3+1] = r * Math.cos(phi) + 2
-      starPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta)
-    }
-    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
-    const starsMtl = new THREE.PointsMaterial({
-      color: 0xf5ede0,
-      size: 0.18,
+    const beatLight = new THREE.PointLight(0xf2b84a, 0, 16)
+    beatLight.position.set(0, 0.6, 3.2)
+    scene.add(beatLight)
+    beatLightRef.current = beatLight
+
+    const coreLight = new THREE.PointLight(0xaeefff, 1.8, 7)
+    coreLight.position.set(0.9, 0.75, 1.15)
+    sculpture.add(coreLight)
+
+    const shellGeo = new THREE.SphereGeometry(1.92, isMobile ? 48 : 72, isMobile ? 24 : 36)
+    const shellMtl = new THREE.MeshPhysicalMaterial({
+      color: COLORS.glass,
       transparent: true,
-      opacity: 0.7,
-      sizeAttenuation: true,
+      opacity: 0.22,
+      roughness: 0.12,
+      metalness: 0.05,
+      clearcoat: 1,
+      clearcoatRoughness: 0.08,
+      transmission: 0.35,
+      thickness: 0.9,
+      ior: 1.38,
+      reflectivity: 0.72,
+      side: THREE.DoubleSide,
+      depthWrite: false,
     })
-    const stars = new THREE.Points(starGeo, starsMtl)
-    scene.add(stars)
-    starsRef.current  = stars
-    starsMtlRef.current = starsMtl
+    const shell = new THREE.Mesh(shellGeo, shellMtl)
+    sculpture.add(shell)
+    shellRef.current = shell
 
-    // ── Central Sphere ──
-    const sphereGeo = new THREE.SphereGeometry(1.6, 64, 32)
-    const origPos   = sphereGeo.attributes.position.array.slice()
-    const sphereMtl = new THREE.MeshStandardMaterial({
-      color:             new THREE.Color(0x2a9d8f),
-      emissive:          new THREE.Color(0x0d4d47),
-      emissiveIntensity: 0.4,
-      roughness: 0.55,
-      metalness: 0.35,
+    const coreGeo = new THREE.IcosahedronGeometry(1.18, isMobile ? 3 : 4)
+    const coreOriginal = coreGeo.attributes.position.array.slice()
+    const coreMtl = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0x254d68),
+      emissive: new THREE.Color(0x123f5c),
+      emissiveIntensity: 0.95,
+      roughness: 0.2,
+      metalness: 0.9,
     })
-    const sphere = new THREE.Mesh(sphereGeo, sphereMtl)
-    sphere.position.y = 0.5
-    scene.add(sphere)
-    sphereRef.current    = sphere
-    sphereGeoRef.current = sphereGeo
-    origPosRef.current   = origPos
+    const core = new THREE.Mesh(coreGeo, coreMtl)
+    sculpture.add(core)
+    coreRef.current = core
+    coreGeoRef.current = coreGeo
+    coreOriginalRef.current = coreOriginal
 
-    // ── Frequency Bars ──
-    const barGroup = new THREE.Group()
-    scene.add(barGroup)
-    barGroupRef.current = barGroup
+    const coreWireMtl = new THREE.MeshBasicMaterial({
+      color: 0xd8fbff,
+      transparent: true,
+      opacity: 0.24,
+      wireframe: true,
+      depthWrite: false,
+    })
+    const coreWire = new THREE.Mesh(coreGeo, coreWireMtl)
+    sculpture.add(coreWire)
 
-    const bars = []
-    for (let i = 0; i < BAR_COUNT; i++) {
-      const angle  = (i / BAR_COUNT) * Math.PI * 2
-      const isLow  = i < BAR_COUNT / 2
-      const barGeo = new THREE.BoxGeometry(0.09, 1, 0.09)
-      barGeo.translate(0, 0.5, 0) // pivot bottom
-      const barMtl = new THREE.MeshStandardMaterial({
-        color:             isLow ? new THREE.Color(0xff4444) : new THREE.Color(0xffaa00),
-        emissive:          isLow ? new THREE.Color(0xff2200) : new THREE.Color(0xff7700),
-        emissiveIntensity: 2.2,
-        roughness: 0.4,
-        metalness: 0.3,
+    const crystalGeo = new THREE.OctahedronGeometry(0.58, 1)
+    const crystalMtl = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(0xb9f3ff),
+      emissive: new THREE.Color(0x1f718c),
+      emissiveIntensity: 0.65,
+      metalness: 0.38,
+      roughness: 0.08,
+      clearcoat: 1,
+      clearcoatRoughness: 0.05,
+      transparent: true,
+      opacity: 0.74,
+      depthWrite: false,
+    })
+    const innerCrystal = new THREE.Mesh(crystalGeo, crystalMtl)
+    innerCrystal.rotation.set(0.35, 0.4, -0.1)
+    sculpture.add(innerCrystal)
+
+    const fftColumns = []
+    const fftColumnGroup = new THREE.Group()
+    fftColumnGroup.position.set(0, -1.74, 0.08)
+    scene.add(fftColumnGroup)
+
+    FFT_BANDS.forEach(band => {
+      const bandGroup = new THREE.Group()
+      bandGroup.userData.band = band.id
+      fftColumnGroup.add(bandGroup)
+
+      for (let i = 0; i < band.count; i += 1) {
+        const geometry = new THREE.BoxGeometry(band.width, 1, band.depth)
+        geometry.translate(0, 0.5, 0)
+        const material = new THREE.MeshStandardMaterial({
+          color: band.color,
+          emissive: band.emissive,
+          emissiveIntensity: 0.75,
+          roughness: 0.2,
+          metalness: 0.42,
+          transparent: true,
+          opacity: 0,
+        })
+        const column = new THREE.Mesh(geometry, material)
+        const progress = band.count <= 1 ? 0 : i / (band.count - 1)
+        const angle = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(band.startAngle, band.endAngle, progress))
+        column.position.set(Math.cos(angle) * band.radius, 0, Math.sin(angle) * band.radius)
+        column.rotation.y = THREE.MathUtils.degToRad(band.faceAngle)
+        column.scale.y = 0.04
+        bandGroup.add(column)
+        fftColumns.push({
+          mesh: column,
+          material,
+          band,
+          index: i,
+          value: 0,
+        })
+      }
+    })
+    fftColumnsRef.current = fftColumns
+
+    const shockwaves = []
+    const shockwaveGeo = new THREE.RingGeometry(0.96, 1.03, 128)
+    for (let i = 0; i < SHOCKWAVE_COUNT; i += 1) {
+      const ringMtl = new THREE.MeshBasicMaterial({
+        color: COLORS.amber,
         transparent: true,
         opacity: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false,
       })
-      const bar = new THREE.Mesh(barGeo, barMtl)
-      bar.position.set(
-        Math.sin(angle) * BAR_RADIUS,
-        -1.5,
-        Math.cos(angle) * BAR_RADIUS,
+      const ring = new THREE.Mesh(shockwaveGeo, ringMtl)
+      ring.rotation.x = -Math.PI / 2
+      ring.visible = false
+      ring.userData.age = 0
+      ring.userData.life = 42
+      scene.add(ring)
+      shockwaves.push(ring)
+    }
+    shockwavesRef.current = shockwaves
+
+    const particleGeo = new THREE.SphereGeometry(0.035, 6, 6)
+    const particles = []
+    for (let i = 0; i < BEAT_PARTICLE_POOL_SIZE; i += 1) {
+      const particle = new THREE.Mesh(
+        particleGeo,
+        new THREE.MeshBasicMaterial({
+          color: COLORS.amber,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+        })
       )
-      bar.scale.y = 0.02
-      barGroup.add(bar)
-      bars.push(bar)
+      particle.visible = false
+      particle.userData.active = false
+      particle.userData.life = 0
+      scene.add(particle)
+      particles.push(particle)
     }
-    barsRef.current = bars
+    particlesRef.current = particles
 
-    // ── Resize ──
     function onResize() {
-      const w = canvas.clientWidth
-      const h = canvas.clientHeight
-      camera.aspect = w / h
+      const width = canvas.clientWidth
+      const height = canvas.clientHeight
+      if (!width || !height) return
+      camera.aspect = width / height
       camera.updateProjectionMatrix()
-      renderer.setSize(w, h, false)
+      renderer.setSize(width, height, false)
     }
-    window.addEventListener('resize', onResize)
 
-    // ── Animate ──
-    const camDrift = { x: 0, y: 4.5, z: 14 }
+    onResize()
+    window.addEventListener('resize', onResize)
 
     function animate() {
       rafRef.current = requestAnimationFrame(animate)
-      const t    = clockRef.current.getElapsedTime()
+      const t = clockRef.current.getElapsedTime()
       const lerp = interpRef.current
 
-      // ── Audio ──
-      let amplitude   = (Math.sin(t * 0.85) * 0.5 + 0.5) * 0.18 + 0.04
-      let isBeat      = false
-      let freqData    = null
+      let amplitude = (Math.sin(t * 0.85) * 0.5 + 0.5) * 0.16 + 0.04
+      let rawAmplitude = amplitude
+      let isBeat = false
+      let freqData = null
+      let lowEnergy = 0
+      let midEnergy = 0
+      let highEnergy = 0
 
       if (analyserRef.current && dataArrayRef.current) {
         analyserRef.current.getByteFrequencyData(dataArrayRef.current)
         freqData = dataArrayRef.current
-
         let sum = 0
-        for (let i = 0; i < freqData.length; i++) sum += freqData[i]
-        amplitude = sum / freqData.length / 255
+        for (let i = 0; i < freqData.length; i += 1) sum += freqData[i]
+        rawAmplitude = sum / freqData.length / 255
+
+        if (timeDataArrayRef.current) {
+          analyserRef.current.getByteTimeDomainData(timeDataArrayRef.current)
+          let rmsSum = 0
+          for (let i = 0; i < timeDataArrayRef.current.length; i += 1) {
+            const centered = (timeDataArrayRef.current[i] - 128) / 128
+            rmsSum += centered * centered
+          }
+          const rms = Math.sqrt(rmsSum / timeDataArrayRef.current.length)
+          rawAmplitude = THREE.MathUtils.clamp((rms - 0.055) * 1.75, 0.035, 0.46)
+        }
+        lowEnergy = averageBins(freqData, LOW_BIN_RANGE)
+        midEnergy = averageBins(freqData, MID_BIN_RANGE)
+        highEnergy = averageBins(freqData, HIGH_BIN_RANGE)
+
+        if (!audioRef.current?.paused) {
+          const audioTime = audioRef.current?.currentTime || 0
+            if (audioTime < lastAudioTimeRef.current - 0.25) {
+              syncManualBeatIndex(audioTime)
+            }
+
+          const energyRise = lowEnergy - lastBeatEnergyRef.current
+          rollingBassRef.current = rollingBassRef.current * 0.92 + lowEnergy * 0.08
+
+          while (MANUAL_BEAT_TIMES[manualBeatIndexRef.current] != null) {
+            const scheduledBeatTime = MANUAL_BEAT_TIMES[manualBeatIndexRef.current] + BEAT_VISUAL_OFFSET
+            if (scheduledBeatTime >= audioTime - 0.12) break
+            manualBeatIndexRef.current += 1
+          }
+
+          const nextManualBeat = MANUAL_BEAT_TIMES[manualBeatIndexRef.current]
+          const nextVisualBeat = nextManualBeat == null ? null : nextManualBeat + BEAT_VISUAL_OFFSET
+          const hasManualBeat =
+            modeRef.current === 'beats' &&
+            nextVisualBeat != null &&
+            lastAudioTimeRef.current < nextVisualBeat &&
+            audioTime >= nextVisualBeat
+
+          const fallbackThreshold = Math.max(rollingBassRef.current * 1.85, 0.13)
+          const hasFallbackAccent =
+            MANUAL_BEAT_TIMES.length === 0 &&
+            modeRef.current === 'beats' &&
+            lowEnergy > fallbackThreshold &&
+            energyRise > 0.06
+
+          if (
+            (hasManualBeat || hasFallbackAccent) &&
+            beatCooldownRef.current <= 0
+          ) {
+            isBeat = true
+            beatGlowRef.current = 1
+            beatCooldownRef.current = hasManualBeat ? 10 : 20
+            if (hasManualBeat) manualBeatIndexRef.current += 1
+          }
+
+          if (beatCooldownRef.current > 0) beatCooldownRef.current -= 1
+          lastBeatEnergyRef.current = lowEnergy
+          lastAudioTimeRef.current = audioTime
+        }
       }
 
-      // ── Beat: BPM timer ──
-      if (beatActiveRef.current) {
-        isBeat = true
-        beatActiveRef.current = false
-      }
+      const amplitudeSmoothing = rawAmplitude > amplitudeLevelRef.current ? 0.16 : 0.075
+      amplitudeLevelRef.current = THREE.MathUtils.lerp(amplitudeLevelRef.current, rawAmplitude, amplitudeSmoothing)
+      amplitude = amplitudeLevelRef.current
 
-      // ── Point light ──
-      pointLight.intensity = 1.5 + amplitude * 4
+      beatGlowRef.current *= 0.88
+      const beatGlow = beatGlowRef.current * lerp.beatBlend
 
-      // ── Camera drift ──
-      const driftX  = Math.sin(t * 0.09) * 1.8
-      const driftY  = Math.sin(t * 0.065) * 0.6
-      camera.position.x += (lerp.camZ * 0 + driftX - camera.position.x) * 0.03
-      camera.position.y += (lerp.camY + driftY - camera.position.y) * 0.04
+      keyLight.intensity = 2.2 + amplitude * 3.2
+      rimLight.intensity = 1.4 + lerp.frequencyBlend * 1.4
+      beatLight.intensity = beatGlow * 8
+      coreLight.intensity = 1.35 + amplitude * 2.2 + beatGlow * 3.4
+
+      camera.position.x += (lerp.camX - camera.position.x) * 0.045
+      camera.position.y += (lerp.camY + Math.sin(t * 0.22) * 0.05 - camera.position.y) * 0.04
       camera.position.z += (lerp.camZ - camera.position.z) * 0.04
-      camera.lookAt(0, 0.5, 0)
+      camera.lookAt(0, -0.12 + lerp.frequencyBlend * -0.2, 0)
 
-      // ── Plane shader ──
-      planeMtl.uniforms.uTime.value      = t
-      planeMtl.uniforms.uAmplitude.value = amplitude
-      planeMtl.uniforms.uFlat.value      = lerp.planeFlat
+      sculpture.rotation.y += 0.0009 + lerp.frequencyBlend * 0.002
+      sculpture.rotation.x = Math.sin(t * 0.12) * (0.045 + lerp.frequencyBlend * 0.055)
 
-      // ── Sphere vertex displacement ──
-      const baseScale = Math.max(0.4, lerp.sphereScale)
-      const targetSphereScale = baseScale * (1 + amplitude * 0.35)
-      sphere.scale.setScalar(
-        THREE.MathUtils.lerp(sphere.scale.x, targetSphereScale, 0.1)
-      )
+      const shellScale = lerp.shellScale * (1 + amplitude * (0.22 * lerp.amplitudeBlend + 0.04) + beatGlow * 0.08)
+      shell.scale.setScalar(THREE.MathUtils.lerp(shell.scale.x, shellScale, 0.065))
+      shell.material.opacity = 0.18 + lerp.amplitudeBlend * 0.08 + amplitude * 0.06 + beatGlow * 0.08
+      shell.material.emissive?.set?.(0x000000)
 
-      const posAttr = sphereGeoRef.current.attributes.position
-      const orig    = origPosRef.current
-      for (let i = 0; i < posAttr.count; i++) {
-        const ox = orig[i*3], oy = orig[i*3+1], oz = orig[i*3+2]
-        const len = Math.sqrt(ox*ox + oy*oy + oz*oz) || 1
-        const nx = ox/len, ny = oy/len, nz = oz/len
-        const d =
-          Math.sin(ox * 2.8 + t * 1.3) *
-          Math.cos(oy * 2.8 + t * 0.95) *
-          Math.sin(oz * 2.8 + t * 0.75)
-        const disp = d * amplitude * 0.7
-        posAttr.setXYZ(i, ox + nx*disp, oy + ny*disp, oz + nz*disp)
+      const coreScale = lerp.coreScale * (1 + amplitude * (0.46 * lerp.amplitudeBlend + 0.06) + beatGlow * 0.18)
+      core.scale.setScalar(THREE.MathUtils.lerp(core.scale.x, coreScale, 0.065))
+      core.material.color.copy(COLORS.core).lerp(COLORS.coreBright, amplitude * 0.55 + beatGlow * 0.28)
+      core.material.emissive.copy(new THREE.Color(0x0a243c)).lerp(COLORS.amber, beatGlow * 0.45)
+      core.material.emissiveIntensity = 0.7 + amplitude * 1.45 + beatGlow * 1.15
+      coreWire.scale.copy(core.scale).multiplyScalar(1.012)
+      coreWire.rotation.copy(core.rotation)
+      coreWire.material.opacity = 0.18 + lerp.amplitudeBlend * 0.08 + lerp.frequencyBlend * 0.06 + beatGlow * 0.12
+      innerCrystal.scale.setScalar(0.92 + amplitude * 0.18 + beatGlow * 0.14)
+      innerCrystal.rotation.x += 0.004 + lerp.frequencyBlend * 0.003
+      innerCrystal.rotation.y -= 0.003 + lerp.beatBlend * 0.002
+      innerCrystal.material.emissiveIntensity = 0.48 + amplitude * 0.65 + beatGlow * 1.4
+      innerCrystal.material.opacity = 0.6 + lerp.frequencyBlend * 0.16 + beatGlow * 0.16
+
+      const position = coreGeo.attributes.position
+      const original = coreOriginal
+      const noise = noiseRef.current
+      const deformationStrength = lerp.deformation + amplitude * (0.045 * lerp.amplitudeBlend + 0.025) + beatGlow * 0.08
+      const noiseSpeed = t * (0.055 + amplitude * 0.05)
+      for (let i = 0; i < position.count; i += 1) {
+        const ox = original[i * 3]
+        const oy = original[i * 3 + 1]
+        const oz = original[i * 3 + 2]
+        const length = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1
+        const nx = ox / length
+        const ny = oy / length
+        const nz = oz / length
+        const n =
+          noise(nx * 1.55 + noiseSpeed, ny * 1.55, nz * 1.55 - noiseSpeed) * 0.55 +
+          noise(nx * 3.2 - noiseSpeed * 0.7, ny * 3.2 + noiseSpeed, nz * 3.2) * 0.22
+        const radius = 1 + n * deformationStrength
+        position.setXYZ(i, ox * radius, oy * radius, oz * radius)
       }
-      posAttr.needsUpdate = true
-      sphereGeoRef.current.computeVertexNormals()
-      // ── Beat: particle burst (beats mode only) ──
-      const currentMode = modeRef.current
-      if (isBeat && currentMode === 'beats') {
-        for (let i = 0; i < 40; i++) {
-          const geo = new THREE.SphereGeometry(0.06, 6, 6)
-          const mat = new THREE.MeshBasicMaterial({
-            color:       0xe8a020,
-            transparent: true,
-            opacity:     1.0,
-          })
-          const p = new THREE.Mesh(geo, mat)
-          p.position.set(0, 0, 0)
-          p.userData.vx   = (Math.random() - 0.5) * 0.35
-          p.userData.vy   = (Math.random() - 0.5) * 0.35
-          p.userData.vz   = (Math.random() - 0.5) * 0.35
-          p.userData.life = 30
-          sceneRef.current.add(p)
-          particlesRef.current.push(p)
-        }
-      }
+      position.needsUpdate = true
+      coreGeo.computeVertexNormals()
 
-      // ── Update active particles ──
-      particlesRef.current = particlesRef.current.filter(p => {
-        p.position.x += p.userData.vx
-        p.position.y += p.userData.vy
-        p.position.z += p.userData.vz
-        p.userData.life--
-        p.material.opacity = p.userData.life / 30
-        if (p.userData.life <= 0) {
-          sceneRef.current.remove(p)
-          p.geometry.dispose()
-          p.material.dispose()
-          return false
+      const fftVisibility = lerp.frequencyBlend + lerp.beatBlend * 0.1
+      fftColumnsRef.current.forEach(column => {
+        const value = sampleBand(freqData, column.band.range, column.index, column.band.count)
+        const smoothing = column.band.id === 'high' ? 0.3 : column.band.id === 'mid' ? 0.23 : 0.18
+        column.value = THREE.MathUtils.lerp(column.value, value, smoothing)
+
+        const beatLift = beatGlow * (column.band.id === 'low' ? 0.42 : column.band.id === 'mid' ? 0.3 : 0.2)
+        const targetHeight =
+          0.06 +
+          column.value * column.band.maxHeight * column.band.response * (0.78 + lerp.frequencyBlend * 0.42) +
+          beatLift
+
+        column.mesh.scale.y = THREE.MathUtils.lerp(column.mesh.scale.y, targetHeight, 0.22)
+        column.mesh.position.y = -0.03
+        column.mesh.rotation.z = 0
+        column.mesh.rotation.x = 0
+        column.material.opacity = THREE.MathUtils.lerp(
+          column.material.opacity,
+          Math.min(1, fftVisibility * (0.52 + column.value * 0.72 + beatGlow * 0.16)),
+          0.14
+        )
+        column.material.color.setHex(column.band.color)
+        column.material.emissive.setHex(column.band.emissive)
+        column.material.emissiveIntensity =
+          0.62 +
+          column.value * (column.band.id === 'low' ? 2.25 : column.band.id === 'mid' ? 2 : 1.65) +
+          beatGlow * 0.75
+
+        if (beatGlow > 0.02 && modeRef.current === 'beats') {
+          column.material.color.lerp(COLORS.amber, beatGlow * 0.35)
+          column.material.emissive.lerp(COLORS.amber, beatGlow * 0.45)
         }
-        return true
       })
 
-      // ── Bars ──
-      const bv = lerp.barOpacity
-      for (let i = 0; i < BAR_COUNT; i++) {
-        const bar = barsRef.current[i]
-        bar.material.opacity = THREE.MathUtils.lerp(bar.material.opacity, bv, 0.08)
-
-        if (freqData && bv > 0.01) {
-          const fi  = Math.floor((i / BAR_COUNT) * (freqData.length * 0.8))
-          const val = freqData[fi] / 255
-          bar.scale.y = THREE.MathUtils.lerp(bar.scale.y, 0.02 + val * 6, 0.22)
+      if (isBeat && modeRef.current === 'beats') {
+        const ring = shockwavesRef.current.find(item => !item.visible) || shockwavesRef.current[0]
+        if (ring) {
+          ring.visible = true
+          ring.userData.age = 0
+          ring.scale.setScalar(0.22)
+          ring.material.opacity = 0.7
         }
+
+        let activated = 0
+        particlesRef.current.forEach(particle => {
+          if (particle.userData.active || activated >= BEAT_PARTICLES_PER_PULSE) return
+          const angle = Math.random() * Math.PI * 2
+          const lift = (Math.random() - 0.5) * 0.18
+          particle.position.set(Math.cos(angle) * 0.7, lift, Math.sin(angle) * 0.7)
+          particle.userData.vx = Math.cos(angle) * (0.035 + Math.random() * 0.035)
+          particle.userData.vy = (Math.random() - 0.5) * 0.035
+          particle.userData.vz = Math.sin(angle) * (0.035 + Math.random() * 0.035)
+          particle.userData.life = 24
+          particle.userData.active = true
+          particle.visible = true
+          particle.material.opacity = 0.72
+          activated += 1
+        })
       }
 
-      // ── Stars ──
-      stars.rotation.y += 0.00006
+      shockwavesRef.current.forEach(ring => {
+        if (!ring.visible) return
+        ring.userData.age += 1
+        const progress = ring.userData.age / ring.userData.life
+        const ease = 1 - (1 - progress) * (1 - progress)
+        ring.scale.setScalar(0.5 + ease * 5.8)
+        ring.material.opacity = Math.max(0, (1 - progress) * 0.58 * lerp.beatBlend)
+        if (progress >= 1) {
+          ring.visible = false
+          ring.material.opacity = 0
+        }
+      })
 
-      // ── Stars ──
-      stars.rotation.y += 0.00006
+      particlesRef.current.forEach(particle => {
+        if (!particle.userData.active) return
+        particle.position.x += particle.userData.vx
+        particle.position.y += particle.userData.vy
+        particle.position.z += particle.userData.vz
+        particle.userData.life -= 1
+        particle.material.opacity = Math.max(0, particle.userData.life / 24)
+        if (particle.userData.life <= 0) {
+          particle.userData.active = false
+          particle.visible = false
+          particle.material.opacity = 0
+        }
+      })
 
       renderer.render(scene, camera)
     }
@@ -395,208 +666,220 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
       cancelAnimationFrame(rafRef.current)
       window.removeEventListener('resize', onResize)
       renderer.dispose()
-      sphereGeo.dispose()
-      planeGeo.dispose()
-      starGeo.dispose()
-      bars.forEach(b => { b.geometry.dispose(); b.material.dispose() })
-      particlesRef.current.forEach(p => {
-        scene.remove(p)
-        p.geometry.dispose()
-        p.material.dispose()
+      shellGeo.dispose()
+      shellMtl.dispose()
+      coreGeo.dispose()
+      coreMtl.dispose()
+      coreWireMtl.dispose()
+      crystalGeo.dispose()
+      crystalMtl.dispose()
+      fftColumnsRef.current.forEach(column => {
+        column.mesh.geometry.dispose()
+        column.material.dispose()
       })
+      shockwaveGeo.dispose()
+      shockwavesRef.current.forEach(ring => {
+        scene.remove(ring)
+        ring.material.dispose()
+      })
+      particlesRef.current.forEach(particle => {
+        scene.remove(particle)
+        particle.material.dispose()
+      })
+      particleGeo.dispose()
+      fftColumnsRef.current = []
+      shockwavesRef.current = []
       particlesRef.current = []
-      clearTimeout(beatTimeoutRef.current)
-      clearInterval(beatIntervalRef.current)
     }
   }, [])
 
-  // ── Page load sequence ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!titleRef.current) return
-    gsap.set([titleRef.current, subtitleRef.current, playBtnRef.current], {
-      opacity: 0, y: 24,
-    })
-    const tl = gsap.timeline({ delay: 0.3 })
-    tl.to(titleRef.current,    { opacity: 1, y: 0, duration: 0.9, ease: 'power3.out' }, 0.5)
-    tl.to(subtitleRef.current, { opacity: 1, y: 0, duration: 0.7, ease: 'power3.out' }, 1.0)
-    tl.to(playBtnRef.current,  { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }, 1.5)
-  }, [])
-
-  // ── BPM timer ──────────────────────────────────────────────────────────
-  function triggerBeat() {
-    beatActiveRef.current = true
+  function resetBeatTracking() {
+    rollingBassRef.current = 0.05
+    beatCooldownRef.current = 0
+    lastBeatEnergyRef.current = 0
+    syncManualBeatIndex(audioRef.current?.currentTime || 0)
   }
 
-  // ── Audio ──────────────────────────────────────────────────────────────
+  function syncManualBeatIndex(time = 0) {
+    let index = 0
+    while (MANUAL_BEAT_TIMES[index] != null) {
+      const scheduledBeatTime = MANUAL_BEAT_TIMES[index] + BEAT_VISUAL_OFFSET
+      if (scheduledBeatTime >= time - 0.12) break
+      index += 1
+    }
+    manualBeatIndexRef.current = index
+    lastAudioTimeRef.current = time
+  }
+
   async function initAudio() {
     if (audioCtxRef.current) return
     const audio = audioRef.current
-    const ctx   = new AudioContext()
+    const ctx = new AudioContext()
     audioCtxRef.current = ctx
 
     const analyser = ctx.createAnalyser()
-    analyser.fftSize              = 512
+    analyser.fftSize = 512
     analyser.smoothingTimeConstant = 0.55
     analyserRef.current = analyser
     dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount)
+    timeDataArrayRef.current = new Uint8Array(analyser.fftSize)
 
     const src = ctx.createMediaElementSource(audio)
     src.connect(analyser)
     analyser.connect(ctx.destination)
 
     if (ctx.state === 'suspended') await ctx.resume()
+    resetBeatTracking()
     await audio.play()
     setPlaying(true)
     setStarted(true)
-
-    // fade out title overlay
-    gsap.to(overlayRef.current, { opacity: 0, duration: 0.9, ease: 'power2.in' })
-
-    // Start BPM-synced beat timer — 112 BPM = 545ms interval
-    // Delay first beat to match audio's first beat at ~0.67s
-    beatTimeoutRef.current = setTimeout(() => {
-      triggerBeat()
-      beatIntervalRef.current = setInterval(triggerBeat, 545)
-    }, 670)
   }
 
   async function handlePlay() {
     if (!started) {
       await initAudio()
+      return
+    }
+
+    const audio = audioRef.current
+    if (audio.paused) {
+      await audioCtxRef.current?.resume()
+      resetBeatTracking()
+      await audio.play()
+      setPlaying(true)
     } else {
-      const audio = audioRef.current
-      if (audio.paused) {
-        await audioCtxRef.current?.resume()
-        await audio.play()
-        setPlaying(true)
-      } else {
-        audio.pause()
-        setPlaying(false)
-      }
+      audio.pause()
+      setPlaying(false)
     }
   }
 
+  function handleSeek(event) {
+    const audio = audioRef.current
+    if (!audio || !duration) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const pct = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+    audio.currentTime = pct * duration
+    resetBeatTracking()
+    setCurrentTime(audio.currentTime)
+  }
+
+  const progress = duration ? Math.min(100, (currentTime / duration) * 100) : 0
+  const activeReadout = MODES.find(mode => mode.id === activeMode)?.readout || 'Mode: Amplitude'
+
   return (
-    <section className={styles.hero} id="hero">
-      <canvas ref={canvasRef} className={styles.canvas} />
-
-      <audio ref={audioRef} src="/balochi_audio.wav" loop preload="auto" />
-
-      {/* Pre-play overlay */}
-      <div ref={overlayRef} className={styles.overlay}>
-        <h1 ref={titleRef} className={styles.heroTitle}>Ustad Noor Bakhsh</h1>
-        <p ref={subtitleRef} className={styles.heroSubtitle}>
-          Balochi Audio Visualisers &nbsp;&middot;&nbsp; Week 5
-        </p>
-        <button
-          ref={playBtnRef}
-          className={styles.playBtn}
-          onClick={handlePlay}
-          aria-label="Play music"
-          data-cursor
-        >
-          <PlayIcon />
-          <span className={styles.playLabel}>play</span>
-        </button>
-      </div>
-
-      {/* Mode switcher — appears after play */}
-      {started && (
-        <div ref={modeBarRef} className={styles.modeSwitcher}>
-          {[
-            { id: 'amplitude', label: 'Amplitude' },
-            { id: 'fft',       label: 'FFT' },
-            { id: 'beats',     label: 'Beats' },
-          ].map(({ id, label }) => (
-            <button
-              key={id}
-              className={`${styles.modeBtn} ${activeMode === id ? styles.modeBtnActive : ''}`}
-              onClick={() => doModeTransition(id)}
-              data-cursor
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Pause / resume */}
-      {started && (
-        <button
-          className={styles.pauseBtn}
-          onClick={handlePlay}
-          aria-label={playing ? 'Pause' : 'Resume'}
-          data-cursor
-        >
-          {playing ? <PauseIcon /> : <PlayIconSmall />}
-        </button>
-      )}
-
-      {/* Colour legend — FFT and BEATS modes only */}
-      <div
-        className={styles.legend}
-        style={{ opacity: (activeMode === 'fft' || activeMode === 'beats') ? 1 : 0 }}
-      >
-        <div className={styles.legendRow}>
-          <span className={styles.swatch} style={{ background: '#ff4444' }} />
-          <span className={styles.legendLabel}>Low Freq</span>
-        </div>
-        <div className={styles.legendRow}>
-          <span className={styles.swatch} style={{ background: '#ffaa00' }} />
-          <span className={styles.legendLabel}>High Freq</span>
-        </div>
-        {activeMode === 'beats' && (
-          <div className={styles.legendRow}>
-            <span className={styles.swatch} style={{ background: '#e8a020' }} />
-            <span className={styles.legendLabel}>Beat</span>
+    <section className={styles.playerSection} id="player">
+      <div className={styles.playerWindow}>
+        <div className={styles.titleBar}>
+          <span>Balochi Beats Player</span>
+          <div className={styles.windowControls} aria-hidden="true">
+            <span />
+            <span />
+            <span />
           </div>
-        )}
-      </div>
+        </div>
 
-      <div className={styles.scrollHint} aria-hidden="true">
-        <span className={styles.scrollText}>scroll</span>
-        <ScrollArrow />
+        <div className={styles.menuRow} aria-label="Player menu">
+          <span>File</span>
+          <span>Play</span>
+          <span>View</span>
+          <span>Analysis</span>
+          <span>Help</span>
+        </div>
+
+        <audio
+          ref={audioRef}
+          src="/balochi_audio.wav"
+          loop
+          preload="auto"
+          onLoadedMetadata={event => setDuration(event.currentTarget.duration || 0)}
+          onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime || 0)}
+        />
+
+        <div className={styles.playerBody}>
+          <div className={styles.leftPanel}>
+            <div className={styles.brandBlock}>
+              <p className={styles.overline}>Custom web audio player</p>
+              <h1>Balochi Beats</h1>
+              <p className={styles.subtitle}>
+                A browser-based audio analysis of loudness, frequency, and rhythm.
+              </p>
+            </div>
+
+            <div className={styles.nowPlaying}>
+              <span className={styles.label}>Now playing</span>
+              <strong>Ustad Noor Bakhsh / Balochi music recording</strong>
+            </div>
+
+            <div className={styles.playlistPanel}>
+              <div className={styles.panelTitle}>Playlist / Studies</div>
+              <ol>
+                <li className={activeMode === 'amplitude' ? styles.activeTrack : ''}>01 Amplitude visualisation</li>
+                <li className={activeMode === 'fft' ? styles.activeTrack : ''}>02 FFT / frequency visualisation</li>
+                <li className={activeMode === 'beats' ? styles.activeTrack : ''}>03 Beat response / rhythm</li>
+              </ol>
+            </div>
+          </div>
+
+          <div className={styles.screenPanel}>
+            <div className={styles.screenTop}>
+              <span>{activeReadout}</span>
+              <span>{playing ? 'Signal: live' : 'Signal: standby'}</span>
+            </div>
+            <div className={styles.visualiserScreen}>
+              <canvas ref={canvasRef} className={styles.canvas} />
+              <div
+                className={`${styles.frequencyLegend} ${activeMode === 'amplitude' ? styles.legendSubtle : ''}`}
+                aria-label="Visualiser legend"
+              >
+                <span><i className={styles.lowKey} />LOW: bright cyan front-left bars</span>
+                <span><i className={styles.midKey} />MID: vivid mint centre bars</span>
+                <span><i className={styles.highKey} />HIGH: icy blue right-rear bars</span>
+                <span><i className={styles.beatKey} />BEAT: amber pulse</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.transportDeck}>
+          <div className={styles.timeRow}>
+            <span>{formatTime(currentTime)}</span>
+            <button className={styles.progressBar} type="button" onClick={handleSeek} aria-label="Seek audio">
+              <span style={{ width: `${progress}%` }} />
+            </button>
+            <span>{formatTime(duration)}</span>
+          </div>
+
+          <div className={styles.controlRow}>
+            <button className={styles.playButton} onClick={handlePlay} type="button" data-cursor>
+              {playing ? 'Pause' : started ? 'Resume' : 'Play'}
+            </button>
+
+            <div className={styles.modeTabs} role="tablist" aria-label="Analysis modes">
+              {MODES.map(mode => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeMode === mode.id}
+                  className={activeMode === mode.id ? styles.modeActive : ''}
+                  onClick={() => doModeTransition(mode.id)}
+                  data-cursor
+                >
+                  {mode.tab}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={styles.statusStrip}>
+            <span>Source: Balochi recording</span>
+            <span>Analysis: amplitude / frequency / approximate rhythm response</span>
+            <span>{started ? 'Decoder ready' : 'Press Play to connect analyser'}</span>
+          </div>
+        </div>
       </div>
     </section>
   )
 })
 
 export default Visualiser
-
-// ── Inline SVG icons ────────────────────────────────────────────────────────
-function PlayIcon() {
-  return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-      <circle cx="32" cy="32" r="30" stroke="currentColor" strokeWidth="1.2" />
-      <polygon points="26,20 48,32 26,44" fill="currentColor" />
-    </svg>
-  )
-}
-
-function PlayIconSmall() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-      <polygon points="3,1 14,8 3,15" />
-    </svg>
-  )
-}
-
-function PauseIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-      <rect x="3" y="2" width="4" height="12" />
-      <rect x="9" y="2" width="4" height="12" />
-    </svg>
-  )
-}
-
-function ScrollArrow() {
-  return (
-    <svg width="18" height="28" viewBox="0 0 18 28" fill="none">
-      <rect x="6" y="1" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="9" cy="5" r="1.5" fill="currentColor" />
-      <line x1="9" y1="16" x2="9" y2="26" stroke="currentColor" strokeWidth="1.2" />
-      <polyline points="5,22 9,26 13,22" stroke="currentColor" strokeWidth="1.2" fill="none" />
-    </svg>
-  )
-}

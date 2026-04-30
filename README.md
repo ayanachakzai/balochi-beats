@@ -8,7 +8,7 @@ The track is his version of _“Aaye Ho Meri Zindagi Mein Tum Bahar Banke”_ fr
 
 I wanted to visualise this partly because of the sound itself and partly because it connects to my culture. Instead of using a random track, I liked the idea that the visuals respond to a Balochi musician, Balochi instrument and a familiar song, with colours that hint at Balochi textiles and landscapes.
 
-![Ustaad Noor Bakhsh](/Week%204-5/ustaad-noor-bakhsh.jpg)
+![Ustaad Noor Bakhsh](/ustaad-noor-bakhsh.jpg)
 
 ## Visualiser 1 — Amplitude
 

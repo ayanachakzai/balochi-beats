@@ -134,7 +134,10 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
   const rimLightRef = useRef(null)
   const beatLightRef = useRef(null)
   const beatGlowRef = useRef(0)
-  const amplitudeLevelRef = useRef(0.08)
+  const amplitudeLevelRef = useRef(0.12)
+  const loudnessFloorRef = useRef(0.04)
+  const loudnessPeakRef = useRef(0.18)
+  const amplitudeHaloRef = useRef(null)
   const noiseRef = useRef(createNoise3D())
   const audioCtxRef = useRef(null)
   const analyserRef = useRef(null)
@@ -294,6 +297,19 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
     const shell = new THREE.Mesh(shellGeo, shellMtl)
     sculpture.add(shell)
     shellRef.current = shell
+
+    const amplitudeHaloGeo = new THREE.RingGeometry(2.08, 2.16, 128)
+    const amplitudeHaloMtl = new THREE.MeshBasicMaterial({
+      color: COLORS.cyanLight,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+    const amplitudeHalo = new THREE.Mesh(amplitudeHaloGeo, amplitudeHaloMtl)
+    scene.add(amplitudeHalo)
+    amplitudeHaloRef.current = amplitudeHalo
 
     const coreGeo = new THREE.IcosahedronGeometry(1.18, isMobile ? 3 : 4)
     const coreOriginal = coreGeo.attributes.position.array.slice()
@@ -457,7 +473,28 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
             rmsSum += centered * centered
           }
           const rms = Math.sqrt(rmsSum / timeDataArrayRef.current.length)
-          rawAmplitude = THREE.MathUtils.clamp((rms - 0.055) * 1.75, 0.035, 0.46)
+          loudnessFloorRef.current = THREE.MathUtils.lerp(
+            loudnessFloorRef.current,
+            Math.min(rms, loudnessFloorRef.current),
+            0.018
+          )
+          loudnessPeakRef.current = THREE.MathUtils.lerp(
+            loudnessPeakRef.current,
+            Math.max(rms, loudnessFloorRef.current + 0.12),
+            rms > loudnessPeakRef.current ? 0.12 : 0.01
+          )
+          const calibrated = THREE.MathUtils.clamp((rms - 0.035) / 0.24, 0, 1)
+          const relative = THREE.MathUtils.clamp(
+            (rms - loudnessFloorRef.current) /
+              Math.max(0.06, loudnessPeakRef.current - loudnessFloorRef.current),
+            0,
+            1
+          )
+          rawAmplitude = THREE.MathUtils.clamp(
+            0.06 + (calibrated * 0.68 + relative * 0.32) * 0.4,
+            0.055,
+            0.48
+          )
         }
         lowEnergy = averageBins(freqData, LOW_BIN_RANGE)
         midEnergy = averageBins(freqData, MID_BIN_RANGE)
@@ -509,7 +546,7 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
         }
       }
 
-      const amplitudeSmoothing = rawAmplitude > amplitudeLevelRef.current ? 0.16 : 0.075
+      const amplitudeSmoothing = rawAmplitude > amplitudeLevelRef.current ? 0.18 : 0.11
       amplitudeLevelRef.current = THREE.MathUtils.lerp(amplitudeLevelRef.current, rawAmplitude, amplitudeSmoothing)
       amplitude = amplitudeLevelRef.current
 
@@ -529,12 +566,12 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
       sculpture.rotation.y += 0.0009 + lerp.frequencyBlend * 0.002
       sculpture.rotation.x = Math.sin(t * 0.12) * (0.045 + lerp.frequencyBlend * 0.055)
 
-      const shellScale = lerp.shellScale * (1 + amplitude * (0.22 * lerp.amplitudeBlend + 0.04) + beatGlow * 0.08)
+      const shellScale = lerp.shellScale * (1 + amplitude * (0.34 * lerp.amplitudeBlend + 0.04) + beatGlow * 0.08)
       shell.scale.setScalar(THREE.MathUtils.lerp(shell.scale.x, shellScale, 0.065))
       shell.material.opacity = 0.18 + lerp.amplitudeBlend * 0.08 + amplitude * 0.06 + beatGlow * 0.08
       shell.material.emissive?.set?.(0x000000)
 
-      const coreScale = lerp.coreScale * (1 + amplitude * (0.46 * lerp.amplitudeBlend + 0.06) + beatGlow * 0.18)
+      const coreScale = lerp.coreScale * (1 + amplitude * (0.78 * lerp.amplitudeBlend + 0.06) + beatGlow * 0.18)
       core.scale.setScalar(THREE.MathUtils.lerp(core.scale.x, coreScale, 0.065))
       core.material.color.copy(COLORS.core).lerp(COLORS.coreBright, amplitude * 0.55 + beatGlow * 0.28)
       core.material.emissive.copy(new THREE.Color(0x0a243c)).lerp(COLORS.amber, beatGlow * 0.45)
@@ -542,11 +579,23 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
       coreWire.scale.copy(core.scale).multiplyScalar(1.012)
       coreWire.rotation.copy(core.rotation)
       coreWire.material.opacity = 0.18 + lerp.amplitudeBlend * 0.08 + lerp.frequencyBlend * 0.06 + beatGlow * 0.12
-      innerCrystal.scale.setScalar(0.92 + amplitude * 0.18 + beatGlow * 0.14)
+      innerCrystal.scale.setScalar(0.92 + amplitude * 0.24 + beatGlow * 0.14)
       innerCrystal.rotation.x += 0.004 + lerp.frequencyBlend * 0.003
       innerCrystal.rotation.y -= 0.003 + lerp.beatBlend * 0.002
       innerCrystal.material.emissiveIntensity = 0.48 + amplitude * 0.65 + beatGlow * 1.4
       innerCrystal.material.opacity = 0.6 + lerp.frequencyBlend * 0.16 + beatGlow * 0.16
+
+      if (amplitudeHaloRef.current) {
+        const halo = amplitudeHaloRef.current
+        const haloBlend = modeRef.current === 'amplitude' ? lerp.amplitudeBlend : 0
+        halo.scale.setScalar(0.92 + amplitude * 0.85)
+        halo.rotation.z += 0.0012
+        halo.material.opacity = THREE.MathUtils.lerp(
+          halo.material.opacity,
+          haloBlend * (0.08 + amplitude * 0.36),
+          0.12
+        )
+      }
 
       const position = coreGeo.attributes.position
       const original = coreOriginal
@@ -673,6 +722,8 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
       coreWireMtl.dispose()
       crystalGeo.dispose()
       crystalMtl.dispose()
+      amplitudeHaloGeo.dispose()
+      amplitudeHaloMtl.dispose()
       fftColumnsRef.current.forEach(column => {
         column.mesh.geometry.dispose()
         column.material.dispose()
@@ -690,6 +741,7 @@ const Visualiser = forwardRef(function Visualiser({ onModeChange }, ref) {
       fftColumnsRef.current = []
       shockwavesRef.current = []
       particlesRef.current = []
+      amplitudeHaloRef.current = null
     }
   }, [])
 

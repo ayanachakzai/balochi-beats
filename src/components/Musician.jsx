@@ -32,7 +32,7 @@ export default function Musician() {
               src="/ustaad-noor-bakhsh.jpg"
               alt="Ustad Noor Bakhsh playing the electric dambura"
             />
-            <figcaption>Source artwork / Ustad Noor Bakhsh</figcaption>
+            <figcaption>Source artwork / Khaula Jamali (@khaula28)</figcaption>
           </figure>
 
           <div className={styles.content}>
